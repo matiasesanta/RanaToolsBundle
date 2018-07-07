@@ -1,0 +1,13 @@
+{
+    "name": "rana/rana-tools-bundle",
+    "type": "symfony-bundle",
+    "description": "A Symfony Bundle with tools to develop faster",
+    "keywords": ["tools", "symfony2", "bundle tools"],
+    "license": "MIT",
+    "require": {
+        "php": ">=5.4"
+    },
+    "autoload": {
+        "psr-4": { "Rana\\ranaToolsBundle\\": "" }
+    }
+}
