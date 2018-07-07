@@ -1,0 +1,196 @@
+<?php
+
+namespace @@Bundle@@\Controller;
+
+use @@Bundle@@\Entity\@@Entity@@;
+use @@Bundle@@\Form\@@Entity@@Type;
+use FOS\RestBundle\Controller\FOSRestController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Nelmio\ApiDocBundle\Annotation\ApiDoc;
+use FOS\RestBundle\Controller\Annotations as Rest;
+
+/**
+ * @@Entity@@ controller.
+ */
+class @@Entity@@Controller extends FOSRestController
+{
+
+    /**
+     * @Rest\View(serializerGroups={"@@EntityUnderscore@@"}, statusCode=Response::HTTP_CREATED)
+     * @ApiDoc(
+     *  section="@@SectionName@@",
+     *  resource=true,
+     *  description="Create - @@Entity@@",
+     *  input={"class" = "@@Bundle@@\Form\@@Entity@@Type", "name" = "@@EntityLCFirst@@"},
+     *  statusCodes={
+     *      201="Objeto creado con éxito",
+     *      400="Solicitud incorrecta"
+     *  }
+     * )
+     */
+    public function post@@EntityOnlyUCFirst@@Action(Request $request)
+    {
+        //Get references
+        $em = $this->getDoctrine()->getManager();
+        
+        //Process request
+        $@@EntityLCFirst@@ = new @@Entity@@();
+        $form = $this->createForm(
+            @@Entity@@Type::class,
+            $@@EntityLCFirst@@
+        )->handleRequest($request);
+        if (!$form->isValid()) {
+            return $this->view()->setData($form)->setStatusCode(Response::HTTP_BAD_REQUEST);
+        }
+        $em->persist($@@EntityLCFirst@@);
+        $em->flush();
+
+        //Send response
+        return array('data' => $@@EntityLCFirst@@);
+    }
+
+    /**
+     * @Rest\View(serializerGroups={"@@EntityUnderscore@@"})
+     * @ApiDoc(
+     *  section="@@SectionName@@",
+     *  resource=false,
+     *  description="Get all - @@Entity@@",
+     *  filters={
+     *      {"name"="queryParam1Name", "dataType"="string", "required"="false", "description"="Find by queryParam1Name"},
+     *      {"name"="queryParam2Name", "dataType"="string", "required"="false", "description"="Find by queryParam2Name"},
+     *      {"name"="queryParam3Name", "dataType"="string", "required"="false", "description"="Find by queryParam3Name"},
+     *      {"name"="orderBy", "dataType"="string", "required"="false", "description"="One of: ['queryParam1Name', 'queryParam2Name', 'queryParam3Name']"},
+     *      {"name"="orderType", "dataType"="string", "required"="false", "description"="One of: ['ASC', 'DESC']"},
+     *      {"name"="exclusiveSearch", "dataType"="boolean", "required"="false", "description"="Makes the search is done exclusively for each field using AND condition. Must be true in column search."},
+     *      {"name"="page", "dataType"="integer", "required"="false", "description"="Page number."}
+     *  },
+     *  statusCodes={
+     *      200="Éxito"
+     *  }
+     * )
+     */
+    public function get@@EntityOnlyUCFirst@@Action(Request $request)
+    {
+        //TODO: Modify Repository and change queryParam1Name, queryParam2Name and queryParam3Name
+        
+        //Get references
+        $repository = $this->getDoctrine()->getRepository('@@Bundle@@:@@Entity@@');
+        
+        //Process request
+        $@@EntityLCFirst@@ = $repository->_findAll(
+            $request->query->get('page', null),
+            Array(
+                'queryParam1Name' => $request->query->get('queryParam1Name', null),
+                'queryParam2Name' => $request->query->get('queryParam2Name', null),
+                'queryParam3Name' => $request->query->get('queryParam3Name', null)
+            ),
+            $request->query->get('orderBy', null),
+            $request->query->get('orderType', null),
+            $request->query->get('exclusiveSearch', null)
+        );
+
+        //Send response
+        return $@@EntityLCFirst@@;
+    }
+
+    /**
+     * @Rest\View(serializerGroups={"@@EntityUnderscore@@"})
+     * @ApiDoc(
+     *  section="@@SectionName@@",
+     *  resource=false,
+     *  description="Get - @@Entity@@",
+     *  requirements={
+     *      {
+     *          "name"="@@EntityLCFirst@@",
+     *          "dataType"="integer",
+     *          "requirement"="",
+     *          "description"="@@Entity@@ ID"
+     *      }
+     *  },
+     *  statusCodes={
+     *      200="Éxito",
+     *      404="No encontrado"
+     *  }
+     * )
+     */
+    public function getSingle@@EntityLowerCase@@Action(Request $request, @@Entity@@ $@@EntityLCFirst@@)
+    {
+        return array('data' => $@@EntityLCFirst@@);
+    }
+
+    /**
+     * @Rest\View(serializerGroups={"@@EntityUnderscore@@"})
+     * @ApiDoc(
+     *  section="@@SectionName@@",
+     *  resource=false,
+     *  description="Update - @@Entity@@",
+     *  requirements={
+     *      {
+     *          "name"="@@EntityLCFirst@@",
+     *          "dataType"="integer",
+     *          "requirement"="",
+     *          "description"="@@Entity@@ ID"
+     *      }
+     *  },
+     *  input={"class" = "@@Bundle@@\Form\@@Entity@@Type", "name" = "@@EntityLCFirst@@"},
+     *  statusCodes={
+     *      200="Objeto actualizado con éxito",
+     *      400="Solicitud incorrecta",
+     *      404="No encontrado"
+     *  }
+     * )
+     */
+    public function postSingle@@EntityLowerCase@@Action(Request $request, @@Entity@@ $@@EntityLCFirst@@)
+    {
+        //Get references
+        $em = $this->getDoctrine()->getManager();
+
+        //Process request
+        $form = $this->createForm(
+            @@Entity@@Type::class,
+            $@@EntityLCFirst@@
+        )->handleRequest($request);
+        if (!$form->isValid()) {
+            return $this->view()->setData($form)->setStatusCode(Response::HTTP_BAD_REQUEST);
+        }
+        $em->flush();
+        
+        //Send response
+        return array('data' => $@@EntityLCFirst@@);
+    }
+
+    /**
+     * @Rest\View()
+     * @ApiDoc(
+     *  section="@@SectionName@@",
+     *  resource=false,
+     *  description="Delete - @@Entity@@",
+     *  requirements={
+     *      {
+     *          "name"="@@EntityLCFirst@@",
+     *          "dataType"="integer",
+     *          "requirement"="",
+     *          "description"="@@Entity@@ ID"
+     *      }
+     *  },
+     *  statusCodes={
+     *      200="Objeto eliminado",
+     *      400="Solicitud incorrecta",
+     *      404="No encontrado"
+     *  }
+     * )
+     */
+    public function deleteSingle@@EntityLowerCase@@Action(Request $request, @@Entity@@ $@@EntityLCFirst@@)
+    {
+        //Get references
+        $em = $this->getDoctrine()->getManager();
+
+        //Process request
+        $em->remove($@@EntityLCFirst@@);
+        $em->flush();
+
+        //Send response
+        return $this->view()->setStatusCode(Response::HTTP_OK);
+    }
+}

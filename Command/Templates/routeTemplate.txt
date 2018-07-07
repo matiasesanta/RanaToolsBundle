@@ -1,0 +1,5 @@
+
+@@EntityLCFirst@@:
+    type:     rest
+    resource: @@Bundle@@\Controller\@@Entity@@Controller
+    defaults: {_format: json}
