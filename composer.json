@@ -9,5 +9,6 @@
     },
     "autoload": {
         "psr-4": { "Rana\\ranaToolsBundle\\": "" }
-    }
+    },
+    "minimum-stability": "dev"
 }
