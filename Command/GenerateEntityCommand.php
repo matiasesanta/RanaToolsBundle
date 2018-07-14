@@ -13,8 +13,10 @@ use Symfony\Component\Console\Question\Question;
 
 class GenerateEntityCommand extends ContainerAwareCommand
 {
+    private $filePaths;
     private $choiceOptions;
     private $uniqueAttributes;
+    private $helper;
 
     protected function configure()
     {
@@ -29,53 +31,58 @@ class GenerateEntityCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         //Get arguments and options
-        $bundleAndEntity = $input->getArgument('Bundle:Entity');
+        $bundleAndEntity = $input->getArgument('Bundle:Entity') ? $input->getArgument('Bundle:Entity') : 'AppBundle:Post';
         
         //Initialize attributes
         $this->choiceOptions = array();
         $this->uniqueAttributes = array();
 
         //Get helpers
-        $helper = $this->getHelper('question');
+        $this->helper = $this->getHelper('question');
 
+        //Generate values from options
+        list($bundleName, $entityName) = CommandUtil::getBundleAndEntityArray($bundleAndEntity, $output);
+        
         //Ask for entity name
         $output->writeln('');
         $output->writeln('This command helps you generate Doctrine2 entities.');
         $output->writeln('');
         $output->writeln('First, you need to give the entity name you want to generate.');
-        $output->writeln('You must use the shortcut notation like <comment>AcmeBlogBundle:Post</comment>.');
+        $output->writeln('You must use the shortcut notation like <comment>AppBundle:Post</comment>.');
         $output->writeln('');
-        $bundleAndEntity = $helper->ask($input, $output, new Question('<info>Please enter the name of the bundle</info> [<comment>AppBundle:Post</comment>]:', 'AppBundle:Post'));
+        $bundleAndEntity = $this->helper->ask($input, $output, new Question('<info>Please enter the name of the bundle</info> [<comment>'.$bundleName.':'.$entityName.'</comment>]:', $bundleAndEntity));
 
-        //Generate values from options
-        $bundleAndEntityArray = CommandUtil::getBundleAndEntityArray($bundleAndEntity, $output);
-        $bundleName = ucfirst($bundleAndEntityArray[0]);
-        $entityName = ucfirst($bundleAndEntityArray[1]);
-        $entityLCFirst = lcfirst($entityName);
-        $entityNameUnderscore = CommandUtil::toUnderscore($entityName);
-        
-        //Files path definition
-        $entityFilePath = 'src/'.$bundleName.'/Entity/'.$entityName.'.php';
-        $entityBaseFilePath = __dir__ . '/Templates/entityBaseTemplate.txt';
-        
-        //Verify if the entity exists
-        if (file_exists($entityFilePath)) {
-            $output->writeln('<error>'.$entityFilePath.' already exist.</error>');
+        $this->initializeFilePaths($bundleName, $entityName, $output);
+        $this->createEntity($bundleName, $entityName, $input, $output);
+    }
+
+    private function initializeFilePaths($bundleName, $entityName, $output)
+    {
+        $this->filePaths = array(
+            'entity' => 'src/'.$bundleName.'/Entity/'.$entityName.'.php',
+            'entityBaseTemplate' => __dir__ . '/Templates/entityBaseTemplate.txt'
+        );
+
+        //Verify that the entity does not exist
+        if (file_exists($this->filePaths['entity'])) {
+            $output->writeln('<error>'.$this->filePaths['entity'].' already exist.</error>');
             exit();
         }
+    }
 
+    private function createEntity($bundleName, $entityName, $input, $output)
+    {
         //Read entity base template
-        $entityBaseFile = fopen($entityBaseFilePath, 'r') or die('Unable to open template file!');
-        $newEntity = fread($entityBaseFile, filesize($entityBaseFilePath));
-        fclose($entityBaseFile);
+        $newEntity = CommandUtil::readAndCloseFile($this->filePaths['entityBaseTemplate']);
 
         //Report configuration format
         $output->writeln('');
         $output->writeln('Using <comment>Annotation</comment> as configuration format.');
-        
+
         //Ask for serializer group
         $output->writeln('');
-        $group = $helper->ask($input, $output, new Question('<info>Group (write "false" to avoid add a group)</info> [<comment>'.$entityNameUnderscore.'</comment>]:', $entityNameUnderscore));
+        $entityNameUnderscore = CommandUtil::toUnderscore($entityName);
+        $group = $this->helper->ask($input, $output, new Question('<info>Group (write "false" to avoid add a group)</info> [<comment>'.$entityNameUnderscore.'</comment>]:', $entityNameUnderscore));
         if ($group === 'false') {
             $group = null; 
         }
@@ -85,14 +92,14 @@ class GenerateEntityCommand extends ContainerAwareCommand
         $output->writeln('Instead of starting with a blank entity, you can add some fields now.');
         $output->writeln('Note that the primary key will be added automatically (named id).');
         $output->writeln('');
-        $fieldName = $helper->ask($input, $output, new Question('<info>New field name (press <return> to stop adding fields): </info>', ''));
-        
-        while ($fieldName) {
+        $fieldName = $this->helper->ask($input, $output, new Question('<info>New field name (press <return> to stop adding fields): </info>', ''));
 
+        while ($fieldName) {
             $output->writeln('');
             $output->writeln('<info>Available types:</info> <comment>boolean, choice, integer, string, text, datetime, float.</comment>');
             $output->writeln('');
-            $fieldType = $helper->ask($input, $output, new Question('<info>Field type </info> [<comment>string</comment>]:', 'string'));
+
+            $fieldType = $this->helper->ask($input, $output, new Question('<info>Field type </info> [<comment>string</comment>]:', 'string'));
             $fieldLength = null;
             $onlyPositive = false;
             $wrongType = false;
@@ -102,7 +109,7 @@ class GenerateEntityCommand extends ContainerAwareCommand
                 case 'choice':
                     break;
                 case 'string':
-                    $fieldLength = $helper->ask($input, $output, new Question('<info>Field length </info> [<comment>255</comment>]:', 255));
+                    $fieldLength = $this->helper->ask($input, $output, new Question('<info>Field length </info> [<comment>255</comment>]:', 255));
                     break;
                 case 'text':
                     break;
@@ -110,7 +117,7 @@ class GenerateEntityCommand extends ContainerAwareCommand
                     break;
                 case 'integer':
                 case 'float':
-                    $onlyPositive = $helper->ask($input, $output, new Question('<info>Only positive </info> [<comment>false</comment>]:', false));
+                    $onlyPositive = $this->helper->ask($input, $output, new Question('<info>Only positive </info> [<comment>false</comment>]:', false));
                     $onlyPositive = $onlyPositive === 'true';
                     break;
                 default:
@@ -120,8 +127,8 @@ class GenerateEntityCommand extends ContainerAwareCommand
                     break;
             }
             if (!$wrongType) {
-                $isNullable = $helper->ask($input, $output, new Question('<info>Is nullable </info> [<comment>false</comment>]:', false));
-                $unique = $helper->ask($input, $output, new Question('<info>Unique </info> [<comment>false</comment>]:', false));                    
+                $isNullable = $this->helper->ask($input, $output, new Question('<info>Is nullable </info> [<comment>false</comment>]:', false));
+                $unique = $this->helper->ask($input, $output, new Question('<info>Unique </info> [<comment>false</comment>]:', false));                    
                 
                 $this->addColumnInfo($newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $unique);
                 $this->addAssertInfo($newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $onlyPositive);
@@ -129,12 +136,10 @@ class GenerateEntityCommand extends ContainerAwareCommand
                 $this->addFieldInfo($newEntity, $fieldName);
                 $this->registerUniqueField($fieldName, $unique);
                 $this->registerChoiceOptions($fieldName, $fieldType, $isNullable);
-             
-                $output->writeln($newEntity);
             }
 
             $output->writeln('');
-            $fieldName = $helper->ask($input, $output, new Question('<info>New field name (press <return> to stop adding fields): </info>', ''));
+            $fieldName = $this->helper->ask($input, $output, new Question('<info>New field name (press <return> to stop adding fields): </info>', ''));
         }
 
         $this->addUniqueEntityValidations($newEntity);
@@ -148,11 +153,9 @@ class GenerateEntityCommand extends ContainerAwareCommand
         $output->writeln('<question>                     </question>');
         $output->writeln('');
 
-        $newEntityfile = fopen($entityFilePath, 'w') or die('Unable to create entity file!');
-        fwrite($newEntityfile, $newEntity);
-        fclose($newEntityfile);
+        CommandUtil::writeAndCloseFile($this->filePaths['entity'], $newEntity);
 
-        $output->writeln('Generating entity class <info>'.$entityFilePath.'</info>: <comment>OK!</comment>');
+        $output->writeln('Generating entity class <info>'.$this->filePaths['entity'].'</info>: <comment>OK!</comment>');
         $output->writeln('');
         $output->writeln('<question>                                         </question>');
         $output->writeln('<question>  Everything is OK! Now get to work :).  </question>  ');

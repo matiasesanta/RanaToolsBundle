@@ -11,6 +11,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class GenerateCrudcontrollerCommand extends ContainerAwareCommand
 {
+    private $filePaths;
+
     protected function configure()
     {
         $this
@@ -26,94 +28,116 @@ class GenerateCrudcontrollerCommand extends ContainerAwareCommand
         //Get arguments and options
         $bundleAndEntity = $input->getArgument('Bundle:Entity');
 
-        if ($input->getOption('option')) {
-            // ...
-        }
+        //Generate values from options
+        list($bundleName, $entityName) = CommandUtil::getBundleAndEntityArray($bundleAndEntity, $output);
 
-        $bundleAndEntity = preg_split('/:+/', $bundleAndEntity);
-        if (count($bundleAndEntity) != 2) {
-            $output->writeln('<error>Incorrect Bundle:Entity argument.</error>');
+        $this->initializeFilePaths($bundleName, $entityName, $output);
+        $this->createController($bundleName, $entityName, $output);
+        $this->updateRoutingImport($bundleName, $entityName, $output);
+        $this->updateRoute($bundleName, $entityName, $output);
+    }
+
+    private function initializeFilePaths($bundleName, $entityName, $output)
+    {
+        $this->filePaths = array(
+            'entity' => 'src/'.$bundleName.'/Entity/'.$entityName.'.php',
+            'form' => 'src/'.$bundleName.'/Form/'.$entityName.'Type.php',
+            'controllerTemplate' => __dir__ . '/Templates/controllerTemplate.txt',
+            'controller' => 'src/'.$bundleName.'/Controller/'.$entityName.'Controller.php',
+            'routingImport' => 'app/config/routing.yml',
+            'routing' => 'src/'.$bundleName.'/Resources/config/routing.yml',
+            'routeImportTemplate' => __dir__ . '/Templates/routeImportTemplate.txt',
+            'routeTemplate' => __dir__ . '/Templates/routeTemplate.txt',
+        );
+
+        //Verify if the entity file exists
+        if (!file_exists($this->filePaths['entity'])) {
+            $output->writeln('<error>'.$this->filePaths['entity'].' not exist. Create it using rana:generate:entity command</error>');
             exit();
         }
 
-        //Get the bundle name
-        $bundleName = ucfirst($bundleAndEntity[0]);
-        //Check if the bundle exists
-        $bundles = scandir('src');
-        if (!array_search($bundleName, $bundles)) {
-            $output->writeln('<error>Bundle '.$bundleName.' does not exist.</error>');
+        //Verify if the form file exists
+        if (!file_exists($this->filePaths['form'])) {
+            $output->writeln('<error>'.$this->filePaths['form'].' not exist. Create it using rana:generate:form command</error>');
             exit();
         }
 
-        //Get entity name
-        $entityName = ucfirst($bundleAndEntity[1]);
-        //Check if the entity exists
-        $entities = scandir('src/'.$bundleName.'/Entity');
-        if (!array_search($entityName.'.php', $entities)) {
-            $output->writeln('<error>Entity '.$entityName.' does not exist.</error>');
+        //Verify that the controller file does not exist
+        if (file_exists($this->filePaths['controller'])) {
+            $output->writeln('<error>'.$this->filePaths['controller'].' already exist.</error>');
             exit();
         }
+    }
 
-        //Check if the form exists
-        $forms = scandir('src/'.$bundleName.'/Form');
-        $formName = $entityName.'Type.php';
-        if (!array_search($formName, $forms)) {
-            $output->writeln('<error>The file '.$formName.' does not exist. Please create it using generate:form command.</error>');
-            exit();
-        }
-
-        //Files path definition
-        $controllerTemplateFilePath = __dir__ . '/Templates/controllerTemplate.txt';
-        $controllerFilePath = 'src/'.$bundleName.'/Controller/'.$entityName.'Controller.php';
-        $routingFilePath = 'app/config/routing.yml';
-        $routeTemplateFilePath = __dir__ . '/Templates/routeTemplate.txt';
-
+    private function createController($bundleName, $entityName, $output)
+    {
         //Read controller template
-        $controllerTemplateFile = fopen($controllerTemplateFilePath, 'r') or die('Unable to open template file!');
-        $newController = fread($controllerTemplateFile, filesize($controllerTemplateFilePath));
-        fclose($controllerTemplateFile);
+        $newController = CommandUtil::readAndCloseFile($this->filePaths['controllerTemplate']);
 
         //Create controller
-        $entityOnlyUCFirst = ucfirst(strtolower($entityName));
-        $entityLCFirst = lcfirst($entityName);
-        $sectionName = substr(implode(' ', preg_split('/(?=[A-Z])/', str_replace('Bundle', '', $bundleName))), 1);
-
-        $newController = str_replace('@@Bundle@@', $bundleName, $newController);
-        $newController = str_replace('@@Entity@@', $entityName, $newController);
-        $newController = str_replace('@@EntityLowerCase@@', strtolower($entityName), $newController);
-        $newController = str_replace('@@EntityUnderscore@@', CommandUtil::toUnderscore($entityName), $newController);
-        $newController = str_replace('@@EntityOnlyUCFirst@@', $entityOnlyUCFirst, $newController);
-        $newController = str_replace('@@EntityLCFirst@@', $entityLCFirst, $newController);
-        $newController = str_replace('@@SectionName@@', $sectionName, $newController);
-
+        $newController = CommandUtil::strReplace($newController, array(
+            '@@Bundle@@' => $bundleName,
+            '@@Entity@@' => $entityName,
+            '@@EntityLowerCase@@' => strtolower($entityName),
+            '@@EntityUnderscore@@' => CommandUtil::toUnderscore($entityName),
+            '@@EntityOnlyUCFirst@@' => ucfirst(strtolower($entityName)),
+            '@@EntityLCFirst@@' => lcfirst($entityName),
+            '@@SectionName@@' => substr(implode(' ', preg_split('/(?=[A-Z])/', str_replace('Bundle', '', $bundleName))), 1)
+        ));
+        
         //Write controller
-        $newControllerfile = fopen($controllerFilePath, 'w') or die('Unable to create controller file!');
-        fwrite($newControllerfile, $newController);
-        fclose($newControllerfile);
+        CommandUtil::writeAndCloseFile($this->filePaths['controller'], $newController);
+        $output->writeln('<info>'.$this->filePaths['controller'].' was created or modified.</info>');
+    }
 
-        $output->writeln('<info>The controller was created.</info>');
-
-        //Update routing
-        $routingfile = fopen($routingFilePath, 'r+') or die('Unable to update routing file!');
-        $routing = fread($routingfile, filesize($routingFilePath));
-        if (strpos($routing, $entityLCFirst.':')) {
-            fclose($routingfile);
-            $output->writeln('<comment>The route was not added because it already exists.</comment>');
+    private function updateRoutingImport($bundleName, $entityName, $output)
+    {
+        $routingImportfile = fopen($this->filePaths['routingImport'], 'r+') or die('Unable to update routing file!');
+        $routingImport = fread($routingImportfile, filesize($this->filePaths['routingImport']));
+        
+        if (strpos($routingImport, '@'.$bundleName.'/Resources/config/routing.yml')) {
+            fclose($routingImportfile);
+            $output->writeln('<comment>No changes were added to '.$this->filePaths['routingImport'].' because the resource is already defined.</comment>');
         } else {
-
-            //Read route template
-            $routeTemplateFile = fopen($routeTemplateFilePath, 'r') or die('Unable to open route template file!');
-            $newRoute = fread($routeTemplateFile, filesize($routeTemplateFilePath));
-            fclose($routeTemplateFile);
+            //Read routing template
+            $newRouteImport = CommandUtil::readAndCloseFile($this->filePaths['routeImportTemplate']);
 
             //Create and add route to config file
-            $newRoute = str_replace('@@Entity@@', $entityName, $newRoute);
-            $newRoute = str_replace('@@Bundle@@', $bundleName, $newRoute);
-            $newRoute = str_replace('@@EntityLCFirst@@', $entityLCFirst, $newRoute);
+            $newRouteImport = CommandUtil::strReplace($newRouteImport, array(
+                '@@BundleName@@' => $bundleName,
+                '@@BundleNameUnderscore@@' => CommandUtil::toUnderscore($bundleName)
+            ));
+            
+            //Write file
+            fwrite($routingImportfile, $newRouteImport);
+            fclose($routingImportfile);
+            $output->writeln('<info>'.$this->filePaths['routingImport'].' updated.<info>');
+        }
+    }
+
+    private function updateRoute($bundleName, $entityName, $output)
+    {
+        $routingfile = fopen($this->filePaths['routing'], 'r+') or die('Unable to update routing file!');
+        $routing = fread($routingfile, filesize($this->filePaths['routing']));
+        
+        if (strpos($routing, $bundleName.'\Controller\\'.$entityName.'Controller')) {
+            fclose($routingfile);
+            $output->writeln('<comment>No changes were added to '.$this->filePaths['routing'].' because the resource is already defined.</comment>');
+        } else {
+            //Read routing template
+            $newRoute = CommandUtil::readAndCloseFile($this->filePaths['routeTemplate']);
+
+            //Create and add route to config file
+            $newRoute = CommandUtil::strReplace($newRoute, array(
+                '@@EntityLCFirst@@' => lcfirst($entityName),
+                '@@Bundle@@' => $bundleName,
+                '@@Entity@@' => $entityName,
+            ));
+
             fwrite($routingfile, $newRoute);
             fclose($routingfile);
 
-            $output->writeln('<info>config/routing.yml updated.<info>');
+            $output->writeln('<info>'.$this->filePaths['routing'].' updated.<info>');
         }
     }
 }

@@ -1,0 +1,4 @@
+
+@@BundleNameUnderscore@@_file:
+    type: rest
+    resource: @"@@BundleName@@/Resources/config/routing.yml"
