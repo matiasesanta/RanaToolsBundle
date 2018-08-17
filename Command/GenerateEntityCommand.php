@@ -52,6 +52,9 @@ class GenerateEntityCommand extends ContainerAwareCommand
         $output->writeln('');
         $bundleAndEntity = $this->helper->ask($input, $output, new Question('<info>Please enter the name of the bundle</info> [<comment>'.$bundleName.':'.$entityName.'</comment>]:', $bundleAndEntity));
 
+        //Regenerate values from options
+        list($bundleName, $entityName) = CommandUtil::getBundleAndEntityArray($bundleAndEntity, $output);
+
         $this->initializeFilePaths($bundleName, $entityName, $output);
         $this->createEntity($bundleName, $entityName, $input, $output);
     }
@@ -102,23 +105,35 @@ class GenerateEntityCommand extends ContainerAwareCommand
             $fieldType = $this->helper->ask($input, $output, new Question('<info>Field type </info> [<comment>string</comment>]:', 'string'));
             $fieldLength = null;
             $onlyPositive = false;
+            $isNullable = 'true';
+            $unique = 'false';
             $wrongType = false;
             switch ($fieldType) {
                 case 'boolean':
                     break;
                 case 'choice':
+                    $isNullable = $this->askForIsNullable($input, $output);
+                    $fieldLength = $this->helper->ask($input, $output, new Question('<info>Field length </info> [<comment>255</comment>]:', 255));
+                    $unique = $this->askForIsUnique($input, $output);
                     break;
                 case 'string':
+                    $isNullable = $this->askForIsNullable($input, $output);
                     $fieldLength = $this->helper->ask($input, $output, new Question('<info>Field length </info> [<comment>255</comment>]:', 255));
+                    $unique = $this->askForIsUnique($input, $output);
                     break;
                 case 'text':
+                    $isNullable = $this->askForIsNullable($input, $output);
                     break;
                 case 'datetime':
+                    $isNullable = $this->askForIsNullable($input, $output);
+                    $unique = $this->askForIsUnique($input, $output);
                     break;
                 case 'integer':
                 case 'float':
+                    $isNullable = $this->askForIsNullable($input, $output);
                     $onlyPositive = $this->helper->ask($input, $output, new Question('<info>Only positive </info> [<comment>false</comment>]:', false));
                     $onlyPositive = $onlyPositive === 'true';
+                    $unique = $this->askForIsUnique($input, $output);
                     break;
                 default:
                     $wrongType = true;
@@ -127,9 +142,6 @@ class GenerateEntityCommand extends ContainerAwareCommand
                     break;
             }
             if (!$wrongType) {
-                $isNullable = $this->helper->ask($input, $output, new Question('<info>Is nullable </info> [<comment>false</comment>]:', false));
-                $unique = $this->helper->ask($input, $output, new Question('<info>Unique </info> [<comment>false</comment>]:', false));                    
-                
                 $this->addColumnInfo($newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $unique);
                 $this->addAssertInfo($newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $onlyPositive);
                 $this->addGroupInfo($newEntity, $group);
@@ -143,7 +155,10 @@ class GenerateEntityCommand extends ContainerAwareCommand
         }
 
         $this->addUniqueEntityValidations($newEntity);
+        $this->addAssociations($newEntity);
         $this->addStaticMethods($newEntity);
+        $this->addEventsMethods($newEntity);
+        $this->addGettersAndSetters($newEntity);
         $this->retouchEntityClass($newEntity, $bundleName, $entityName);
 
         //Write file
@@ -163,11 +178,31 @@ class GenerateEntityCommand extends ContainerAwareCommand
         $output->writeln('');
     }
 
+    private function askForIsNullable($input, $output)
+    {
+        $isNullable = $this->helper->ask($input, $output, new Question('<info>Is nullable </info> [<comment>true</comment>]:', 'true'));
+        while($isNullable !== 'true' && $isNullable !== 'false') {
+            $output->writeln('<error>Invalid option. Enter true or false</error>');
+            $isNullable = $this->helper->ask($input, $output, new Question('<info>Is nullable </info> [<comment>true</comment>]:', 'true'));
+        }
+        return $isNullable;
+    }
+
+    private function askForIsUnique($input, $output)
+    {
+        $unique = $this->helper->ask($input, $output, new Question('<info>Unique </info> [<comment>false</comment>]:', 'false'));
+        while($unique !== 'true' && $unique !== 'false') {
+            $output->writeln('<error>Invalid option. Enter true or false"</error>');
+            $unique = $this->helper->ask($input, $output, new Question('<info>Unique </info> [<comment>false</comment>]:', 'false'));
+        }
+        return $unique;
+    }
+
     private function addColumnInfo(&$newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $unique)
     {
-        $fieldLength = $fieldType === 'string' ? ', length='.$fieldLength : '';
-        $isNullable = $isNullable ? ', nullable=true' : '';
-        $unique = $unique ? ', unique=true' : '';
+        $fieldLength = ($fieldType === 'string' || $fieldType === 'choice') ? ', length='.$fieldLength : '';
+        $isNullable = $isNullable === 'true' ? ', nullable=true' : '';
+        $unique = $unique === 'true' ? ', unique=true' : '';
 
         $varType = $this->generateVarType($fieldType);
         $columnType = $this->generateColumnType($fieldType);
@@ -183,7 +218,7 @@ class GenerateEntityCommand extends ContainerAwareCommand
 
     private function addAssertInfo(&$newEntity, $fieldName, $fieldType, $fieldLength, $isNullable, $onlyPositive)
     {
-        if (!$isNullable) {
+        if ($isNullable === 'false') {
             $newEntity = $newEntity .
                 '     * @Assert\NotNull()'."\n";
         }
@@ -245,7 +280,7 @@ class GenerateEntityCommand extends ContainerAwareCommand
 
     private function registerUniqueField($fieldName, $unique) 
     {
-        if ($unique) {
+        if ($unique === 'true') {
             $this->uniqueAttributes[] = '"'.$fieldName.'"';
         }
     }
@@ -302,6 +337,15 @@ class GenerateEntityCommand extends ContainerAwareCommand
         $newEntity = str_replace('@@UniqueEntity@@', $uniqueEntityInfo, $newEntity);
     }
 
+    private function addAssociations(&$newEntity)
+    {
+        $newEntity = $newEntity.
+                "\n".
+                '    //-----------------------------------------------------'."\n".
+                '    // Relaciones'."\n".
+                '    //-----------------------------------------------------'."\n";
+    }
+
     private function addStaticMethods(&$newEntity)
     {
         if (!empty($this->choiceOptions)) {
@@ -314,7 +358,7 @@ class GenerateEntityCommand extends ContainerAwareCommand
         
         foreach($this->choiceOptions as $element ) {
             
-            $element[1] = $element[1] ? '            "",'."\n" : '';
+            $element[1] = $element[1] === 'true' ? '            "",'."\n" : '';
           
             $newEntity = $newEntity.
                 "\n".
@@ -328,6 +372,24 @@ class GenerateEntityCommand extends ContainerAwareCommand
                 '        );'."\n".
                 '    }'."\n";
         }
+    }
+
+    private function addEventsMethods(&$newEntity)
+    {
+        $newEntity = $newEntity.
+            "\n".
+            '    //-----------------------------------------------------'."\n".
+            '    // Eventos'."\n".
+            '    //-----------------------------------------------------'."\n";
+    }
+
+    private function addGettersAndSetters(&$newEntity)
+    {
+        $newEntity = $newEntity.
+            "\n".
+            '    //-----------------------------------------------------'."\n".
+            '    // Constructor, getters & setters '."\n".
+            '    //-----------------------------------------------------'."\n";
     }
 
     private function retouchEntityClass(&$newEntity, $bundleName, $entityName)
