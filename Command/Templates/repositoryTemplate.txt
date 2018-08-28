@@ -1,0 +1,12 @@
+<?php
+
+namespace @@Bundle@@\Repository;
+
+use \Doctrine\ORM\EntityRepository;
+
+/**
+ * @@Entity@@Repository
+ */
+class @@Entity@@Repository extends EntityRepository
+{
+}

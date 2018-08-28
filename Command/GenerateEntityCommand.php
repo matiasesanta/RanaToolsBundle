@@ -56,21 +56,36 @@ class GenerateEntityCommand extends ContainerAwareCommand
         list($bundleName, $entityName) = CommandUtil::getBundleAndEntityArray($bundleAndEntity, $output);
 
         $this->initializeFilePaths($bundleName, $entityName, $output);
-        $this->createEntity($bundleName, $entityName, $input, $output);
+        
+        //Verify that the entity does not exist
+        if (file_exists($this->filePaths['entity'])) {
+            $output->writeln('<comment>'.$this->filePaths['entity'].' already exist and it will not be created.</comment>');
+        } else {
+            $this->createEntity($bundleName, $entityName, $input, $output);
+        }
+
+        //Create Verify that the entity does not exist
+        if (file_exists($this->filePaths['repository'])) {
+            $output->writeln('<comment>'.$this->filePaths['repository'].' already exist and it will not be created.</comment>');
+        } else {
+            $this->createRepository($bundleName, $entityName, $input, $output);
+        }
+
+        $output->writeln('');
+        $output->writeln('<question>                                         </question>');
+        $output->writeln('<question>  Everything is OK! Now get to work :).  </question>  ');
+        $output->writeln('<question>                                         </question>');
+        $output->writeln('');
     }
 
     private function initializeFilePaths($bundleName, $entityName, $output)
     {
         $this->filePaths = array(
             'entity' => 'src/'.$bundleName.'/Entity/'.$entityName.'.php',
-            'entityBaseTemplate' => __dir__ . '/Templates/entityBaseTemplate.txt'
+            'entityBaseTemplate' => __dir__ . '/Templates/entityBaseTemplate.txt',
+            'repository' => 'src/'.$bundleName.'/Repository/'.$entityName.'Repository.php',
+            'repositoryTemplate' => __dir__ . '/Templates/repositoryTemplate.txt'
         );
-
-        //Verify that the entity does not exist
-        if (file_exists($this->filePaths['entity'])) {
-            $output->writeln('<error>'.$this->filePaths['entity'].' already exist.</error>');
-            exit();
-        }
     }
 
     private function createEntity($bundleName, $entityName, $input, $output)
@@ -171,11 +186,26 @@ class GenerateEntityCommand extends ContainerAwareCommand
         CommandUtil::writeAndCloseFile($this->filePaths['entity'], $newEntity);
 
         $output->writeln('Generating entity class <info>'.$this->filePaths['entity'].'</info>: <comment>OK!</comment>');
+    }
+
+    private function createRepository($bundleName, $entityName, $input, $output)
+    {
+        //Read repository template
+        $newRepository = CommandUtil::readAndCloseFile($this->filePaths['repositoryTemplate']);
+    
+        $newRepository = str_replace('@@Bundle@@', $bundleName, $newRepository);
+        $newRepository = str_replace('@@Entity@@', $entityName, $newRepository);
+
+        //Write file
         $output->writeln('');
-        $output->writeln('<question>                                         </question>');
-        $output->writeln('<question>  Everything is OK! Now get to work :).  </question>  ');
-        $output->writeln('<question>                                         </question>');
+        $output->writeln('<question>                         </question>');
+        $output->writeln('<question>  Repository generation  </question>');
+        $output->writeln('<question>                         </question>');
         $output->writeln('');
+
+        CommandUtil::writeAndCloseFile($this->filePaths['repository'], $newRepository);
+
+        $output->writeln('Generating repository class <info>'.$this->filePaths['repository'].'</info>: <comment>OK!</comment>');
     }
 
     private function askForIsNullable($input, $output)
